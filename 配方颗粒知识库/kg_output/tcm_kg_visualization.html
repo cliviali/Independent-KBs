@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中药配方颗粒知识图谱 - TCM Formula Granule Knowledge Graph</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Microsoft YaHei', sans-serif; background: #0a0a1a; color: #e0e0e0; overflow: hidden; }
+#app { display: flex; height: 100vh; }
+
+/* Sidebar */
+#sidebar { width: 320px; background: #12122a; border-right: 1px solid #2a2a4a; display: flex; flex-direction: column; overflow-y: auto; }
+#sidebar h1 { font-size: 16px; padding: 16px; background: linear-gradient(135deg, #1a1a3a, #2a1a4a); border-bottom: 1px solid #3a3a5a; }
+#sidebar h1 span { color: #7c6ff7; }
+.stats { padding: 12px 16px; border-bottom: 1px solid #2a2a4a; }
+.stats .stat-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #888; }
+.stats .stat-row .val { color: #7c6ff7; font-weight: bold; }
+
+/* Filters */
+.filters { padding: 12px 16px; border-bottom: 1px solid #2a2a4a; }
+.filters h3 { font-size: 13px; color: #7c6ff7; margin-bottom: 8px; }
+.filter-group { margin-bottom: 10px; }
+.filter-group label { font-size: 11px; color: #888; display: block; margin-bottom: 4px; }
+.filter-group select, .filter-group input { width: 100%; padding: 6px 8px; background: #1a1a3a; border: 1px solid #3a3a5a; color: #e0e0e0; border-radius: 4px; font-size: 12px; }
+.filter-group input::placeholder { color: #555; }
+.btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.2s; }
+.btn-primary { background: #7c6ff7; color: white; width: 100%; }
+.btn-primary:hover { background: #9b8ff7; }
+.btn-sm { padding: 4px 8px; font-size: 11px; }
+
+/* Query Results */
+#results { padding: 12px 16px; flex: 1; overflow-y: auto; }
+#results h3 { font-size: 13px; color: #7c6ff7; margin-bottom: 8px; }
+.result-item { padding: 8px; margin-bottom: 6px; background: #1a1a3a; border-radius: 4px; border-left: 3px solid #7c6ff7; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+.result-item:hover { background: #2a2a4a; }
+.result-item .name { color: #e0e0e0; font-weight: bold; }
+.result-item .detail { color: #888; font-size: 11px; margin-top: 2px; }
+.result-item .tags { margin-top: 4px; }
+.result-item .tag { display: inline-block; padding: 1px 6px; background: #2a2a5a; color: #9b8ff7; border-radius: 3px; font-size: 10px; margin-right: 3px; }
+
+/* Graph Canvas */
+#graph-container { flex: 1; position: relative; }
+#graph-canvas { width: 100%; height: 100%; }
+#tooltip { position: absolute; display: none; background: rgba(18,18,42,0.95); border: 1px solid #7c6ff7; border-radius: 6px; padding: 10px 14px; font-size: 12px; max-width: 300px; pointer-events: none; z-index: 100; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+#tooltip .tt-title { color: #7c6ff7; font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+#tooltip .tt-type { color: #555; font-size: 10px; text-transform: uppercase; }
+#tooltip .tt-props { margin-top: 6px; }
+#tooltip .tt-prop { display: flex; justify-content: space-between; padding: 2px 0; }
+#tooltip .tt-prop .key { color: #888; }
+#tooltip .tt-prop .val { color: #e0e0e0; }
+
+/* Legend */
+#legend { position: absolute; bottom: 16px; left: 16px; background: rgba(18,18,42,0.9); border: 1px solid #2a2a4a; border-radius: 6px; padding: 10px 14px; font-size: 11px; }
+#legend .legend-item { display: flex; align-items: center; margin-bottom: 4px; }
+#legend .legend-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+
+/* Info Panel */
+#info-panel { position: absolute; top: 16px; right: 16px; width: 280px; max-height: 400px; background: rgba(18,18,42,0.95); border: 1px solid #7c6ff7; border-radius: 8px; padding: 14px; display: none; overflow-y: auto; z-index: 50; }
+#info-panel h3 { color: #7c6ff7; font-size: 14px; margin-bottom: 8px; }
+#info-panel .info-row { padding: 3px 0; font-size: 12px; }
+#info-panel .info-row .key { color: #888; }
+#info-panel .info-row .val { color: #e0e0e0; }
+#info-panel .connections { margin-top: 8px; border-top: 1px solid #2a2a4a; padding-top: 8px; }
+#info-panel .conn-item { padding: 3px 0; font-size: 11px; color: #9b8ff7; cursor: pointer; }
+#info-panel .conn-item:hover { color: #e0e0e0; }
+#close-info { position: absolute; top: 8px; right: 10px; cursor: pointer; color: #888; font-size: 16px; }
+
+/* Preset queries */
+.presets { padding: 12px 16px; border-bottom: 1px solid #2a2a4a; }
+.presets h3 { font-size: 13px; color: #7c6ff7; margin-bottom: 8px; }
+.preset-btn { display: block; width: 100%; text-align: left; padding: 6px 10px; margin-bottom: 4px; background: #1a1a3a; border: 1px solid #2a2a4a; color: #ccc; border-radius: 4px; font-size: 11px; cursor: pointer; transition: all 0.2s; }
+.preset-btn:hover { background: #2a2a4a; border-color: #7c6ff7; color: #7c6ff7; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <h1>🌿 <span>中药配方颗粒</span>知识图谱</h1>
+    <div class="stats" id="stats"></div>
+    
+    <div class="presets">
+      <h3>📋 预设查询</h3>
+      <button class="preset-btn" onclick="queryCompound('绿原酸')">🔍 含绿原酸的药材（52个）</button>
+      <button class="preset-btn" onclick="queryCompound('小檗碱')">🔍 含小檗碱的药材</button>
+      <button class="preset-btn" onclick="queryPharmacology('抗氧化')">🔍 抗氧化活性成分</button>
+      <button class="preset-btn" onclick="queryPharmacology('抗肿瘤')">🔍 抗肿瘤活性成分</button>
+      <button class="preset-btn" onclick="queryClass('黄酮类')">🔍 黄酮类化合物</button>
+      <button class="preset-btn" onclick="queryClass('生物碱类')">🔍 生物碱类化合物</button>
+      <button class="preset-btn" onclick="queryWavelength('254nm')">🔍 254nm检测的药材</button>
+      <button class="preset-btn" onclick="queryMethod('乙腈')">🔍 乙腈流动相方法</button>
+      <button class="preset-btn" onclick="queryYield('15%')">🔍 出膏率含15%的药材</button>
+      <button class="preset-btn" onclick="queryPeakCount('8')">🔍 8个特征峰的药材</button>
+    </div>
+    
+    <div class="filters">
+      <h3>🔎 自定义查询</h3>
+      <div class="filter-group">
+        <label>查询类型</label>
+        <select id="query-type">
+          <option value="compound">按化合物查药材</option>
+          <option value="pharmacology">按药理作用查</option>
+          <option value="class">按化合物分类查</option>
+          <option value="wavelength">按检测波长查</option>
+          <option value="yield">按出膏率查</option>
+          <option value="peak">按特征峰数查</option>
+          <option value="herb">按药材名查关联</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>关键词</label>
+        <input type="text" id="query-keyword" placeholder="输入化合物名、药理作用等...">
+      </div>
+      <button class="btn btn-primary" onclick="executeQuery()">查询</button>
+    </div>
+    
+    <div id="results">
+      <h3>📊 查询结果</h3>
+      <div id="results-list" style="color:#555;font-size:12px;">点击预设查询或输入关键词开始探索</div>
+    </div>
+  </div>
+  
+  <div id="graph-container">
+    <canvas id="graph-canvas"></canvas>
+    <div id="tooltip"></div>
+    <div id="info-panel">
+      <span id="close-info" onclick="closeInfoPanel()">✕</span>
+      <div id="info-content"></div>
+    </div>
+    <div id="legend"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Knowledge Graph Visualization Engine
+// ============================================================
+
+const NODE_COLORS = {
+  Herb: '#4fc3f7',
+  Compound: '#ff8a65',
+  HPLCMethod: '#a5d6a7',
+  Wavelength: '#ce93d8',
+  Column: '#fff176',
+  TLCMethod: '#80cbc4',
+  CompoundClass: '#ef5350',
+  Pharmacology: '#7e57c2',
+  YieldRange: '#8d6e63',
+  PeakCount: '#78909c',
+};
+
+const NODE_SIZES = {
+  Herb: 8, Compound: 6, HPLCMethod: 10, Wavelength: 7,
+  Column: 7, TLCMethod: 7, CompoundClass: 12, Pharmacology: 10,
+  YieldRange: 7, PeakCount: 7,
+};
+
+let graphData = { nodes: [], edges: [] };
+let visibleNodes = [];
+let visibleEdges = [];
+let hoveredNode = null;
+let selectedNode = null;
+let offsetX = 0, offsetY = 0;
+let isDragging = false;
+let dragNode = null;
+let canvas, ctx;
+let animFrame;
+
+// Load data
+fetch('tcm_kg.json').then(r => r.json()).then(data => {
+  graphData = data;
+  initGraph();
+  renderStats();
+  renderLegend();
+});
+
+function initGraph() {
+  canvas = document.getElementById('graph-canvas');
+  ctx = canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  
+  canvas.addEventListener('mousedown', onMouseDown);
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mouseup', onMouseUp);
+  canvas.addEventListener('wheel', onWheel);
+  canvas.addEventListener('dblclick', onDblClick);
+  
+  // Initialize node positions
+  graphData.nodes.forEach(n => {
+    n.x = Math.random() * canvas.width;
+    n.y = Math.random() * canvas.height;
+    n.vx = 0; n.vy = 0;
+    n.fx = 0; n.fy = 0;
+  });
+  
+  // Show all nodes initially (just herbs)
+  showAllHerbs();
+  animate();
+}
+
+function resizeCanvas() {
+  const container = document.getElementById('graph-container');
+  canvas.width = container.clientWidth;
+  canvas.height = container.clientHeight;
+}
+
+function showAllHerbs() {
+  visibleNodes = graphData.nodes.filter(n => n.label === 'Herb');
+  visibleEdges = [];
+  // Add Herb-Compound edges for herbs with many connections
+  const herbEdges = graphData.edges.filter(e => e.type === 'CONTAINS_MARKER');
+  visibleNodes.forEach(n => {
+    const connected = herbEdges.filter(e => e.source === n.id || e.target === n.id);
+    if (connected.length > 0) {
+      connected.forEach(e => {
+        const otherId = e.source === n.id ? e.target : e.source;
+        const other = graphData.nodes.find(n => n.id === otherId);
+        if (other && !visibleNodes.find(v => v.id === other.id)) {
+          visibleNodes.push(other);
+          visibleEdges.push(e);
+        }
+      });
+    }
+  });
+  repositionNodes();
+}
+
+function repositionNodes() {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  visibleNodes.forEach((n, i) => {
+    const angle = (i / visibleNodes.length) * Math.PI * 2;
+    const r = Math.min(canvas.width, canvas.height) * 0.35;
+    n.x = cx + Math.cos(angle) * r;
+    n.y = cy + Math.sin(angle) * r;
+    n.vx = 0; n.vy = 0;
+  });
+}
+
+function animate() {
+  if (visibleNodes.length < 200) {
+    applyForces();
+  }
+  render();
+  animFrame = requestAnimationFrame(animate);
+}
+
+function applyForces() {
+  const alpha = 0.3;
+  const repulsion = 2000;
+  
+  // Repulsion between all nodes
+  for (let i = 0; i < visibleNodes.length; i++) {
+    for (let j = i + 1; j < visibleNodes.length; j++) {
+      const a = visibleNodes[i], b = visibleNodes[j];
+      let dx = a.x - b.x, dy = a.y - b.y;
+      let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      let force = repulsion / (dist * dist);
+      let fx = (dx / dist) * force * alpha;
+      let fy = (dy / dist) * force * alpha;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    }
+  }
+  
+  // Attraction along edges
+  visibleEdges.forEach(e => {
+    const a = visibleNodes.find(n => n.id === e.source);
+    const b = visibleNodes.find(n => n.id === e.target);
+    if (!a || !b) return;
+    let dx = b.x - a.x, dy = b.y - a.y;
+    let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    let force = (dist - 80) * 0.01 * alpha;
+    let fx = (dx / dist) * force;
+    let fy = (dy / dist) * force;
+    a.vx += fx; a.vy += fy;
+    b.vx -= fx; b.vy -= fy;
+  });
+  
+  // Center gravity
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  visibleNodes.forEach(n => {
+    if (n === dragNode) return;
+    n.vx += (cx - n.x) * 0.001;
+    n.vy += (cy - n.y) * 0.001;
+    n.vx *= 0.9; n.vy *= 0.9;
+    n.x += n.vx; n.y += n.vy;
+  });
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw edges
+  visibleEdges.forEach(e => {
+    const a = visibleNodes.find(n => n.id === e.source);
+    const b = visibleNodes.find(n => n.id === e.target);
+    if (!a || !b) return;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = 'rgba(124,111,247,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  });
+  
+  // Highlight edges for hovered/selected node
+  if (hoveredNode || selectedNode) {
+    const focus = hoveredNode || selectedNode;
+    const connectedEdges = visibleEdges.filter(e => e.source === focus.id || e.target === focus.id);
+    const connectedIds = new Set([focus.id]);
+    connectedEdges.forEach(e => {
+      connectedIds.add(e.source);
+      connectedIds.add(e.target);
+    });
+    
+    connectedEdges.forEach(e => {
+      const a = visibleNodes.find(n => n.id === e.source);
+      const b = visibleNodes.find(n => n.id === e.target);
+      if (!a || !b) return;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = 'rgba(124,111,247,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+    
+    // Dim non-connected nodes
+    visibleNodes.forEach(n => {
+      if (!connectedIds.has(n.id)) {
+        ctx.globalAlpha = 0.15;
+      }
+    });
+  }
+  
+  // Draw nodes
+  visibleNodes.forEach(n => {
+    const color = NODE_COLORS[n.label] || '#888';
+    const size = NODE_SIZES[n.label] || 6;
+    const isFocus = (hoveredNode && hoveredNode.id === n.id) || (selectedNode && selectedNode.id === n.id);
+    
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, isFocus ? size + 3 : size, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    
+    if (isFocus) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    
+    // Labels for larger nodes
+    if (size >= 8 || isFocus) {
+      ctx.font = `${isFocus ? 'bold ' : ''}10px Microsoft YaHei`;
+      ctx.fillStyle = '#e0e0e0';
+      ctx.textAlign = 'center';
+      ctx.fillText(n.name.length > 12 ? n.name.substring(0, 12) + '…' : n.name, n.x, n.y + size + 14);
+    }
+  });
+  
+  ctx.globalAlpha = 1;
+}
+
+// Mouse interactions
+function getNodeAt(x, y) {
+  for (let i = visibleNodes.length - 1; i >= 0; i--) {
+    const n = visibleNodes[i];
+    const size = NODE_SIZES[n.label] || 6;
+    const dx = x - n.x, dy = y - n.y;
+    if (dx * dx + dy * dy < (size + 5) * (size + 5)) return n;
+  }
+  return null;
+}
+
+function onMouseDown(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const node = getNodeAt(x, y);
+  if (node) {
+    dragNode = node;
+    isDragging = true;
+  } else {
+    isDragging = true;
+    offsetX = x; offsetY = y;
+  }
+}
+
+function onMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  
+  if (isDragging && dragNode) {
+    dragNode.x = x; dragNode.y = y;
+    dragNode.vx = 0; dragNode.vy = 0;
+  } else if (isDragging) {
+    const dx = x - offsetX, dy = y - offsetY;
+    visibleNodes.forEach(n => { n.x += dx; n.y += dy; });
+    offsetX = x; offsetY = y;
+  } else {
+    const node = getNodeAt(x, y);
+    hoveredNode = node;
+    canvas.style.cursor = node ? 'pointer' : 'default';
+    
+    const tooltip = document.getElementById('tooltip');
+    if (node) {
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.clientX + 15) + 'px';
+      tooltip.style.top = (e.clientY + 15) + 'px';
+      let html = `<div class="tt-type">${node.label}</div>`;
+      html += `<div class="tt-title">${node.name}</div>`;
+      if (node.properties) {
+        html += '<div class="tt-props">';
+        for (const [k, v] of Object.entries(node.properties)) {
+          if (k !== 'name' && v) html += `<div class="tt-prop"><span class="key">${k}</span><span class="val">${v}</span></div>`;
+        }
+        html += '</div>';
+      }
+      const connCount = visibleEdges.filter(e => e.source === node.id || e.target === node.id).length;
+      html += `<div style="margin-top:4px;color:#555;font-size:10px;">关联数: ${connCount}</div>`;
+      tooltip.innerHTML = html;
+    } else {
+      tooltip.style.display = 'none';
+    }
+  }
+}
+
+function onMouseUp() { isDragging = false; dragNode = null; }
+
+function onWheel(e) {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const scale = e.deltaY > 0 ? 0.9 : 1.1;
+  visibleNodes.forEach(n => {
+    n.x = x + (n.x - x) * scale;
+    n.y = y + (n.y - y) * scale;
+  });
+}
+
+function onDblClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const node = getNodeAt(x, y);
+  if (node) {
+    selectedNode = node;
+    showInfoPanel(node);
+  }
+}
+
+function showInfoPanel(node) {
+  const panel = document.getElementById('info-panel');
+  const content = document.getElementById('info-content');
+  panel.style.display = 'block';
+  
+  let html = `<h3>${node.name}</h3>`;
+  html += `<div style="color:#555;font-size:11px;margin-bottom:8px;">${node.label}</div>`;
+  
+  if (node.properties) {
+    for (const [k, v] of Object.entries(node.properties)) {
+      if (k !== 'name' && v) {
+        html += `<div class="info-row"><span class="key">${k}</span> <span class="val">${v}</span></div>`;
+      }
+    }
+  }
+  
+  // Show connections
+  const connected = [];
+  visibleEdges.forEach(e => {
+    if (e.source === node.id) {
+      const target = visibleNodes.find(n => n.id === e.target);
+      if (target) connected.push({ node: target, type: e.type, dir: '→' });
+    } else if (e.target === node.id) {
+      const source = visibleNodes.find(n => n.id === e.source);
+      if (source) connected.push({ node: source, type: e.type, dir: '←' });
+    }
+  });
+  
+  if (connected.length > 0) {
+    html += `<div class="connections"><div style="font-size:12px;color:#7c6ff7;margin-bottom:6px;">关联 (${connected.length})</div>`;
+    connected.slice(0, 30).forEach(c => {
+      html += `<div class="conn-item" onclick="focusNode('${c.node.name.replace(/'/g, "\\'")}')">${c.dir} ${c.node.name} <span style="color:#555">[${c.type}]</span></div>`;
+    });
+    if (connected.length > 30) html += `<div style="color:#555;font-size:10px;">...还有${connected.length - 30}个</div>`;
+    html += '</div>';
+  }
+  
+  content.innerHTML = html;
+}
+
+function closeInfoPanel() {
+  document.getElementById('info-panel').style.display = 'none';
+  selectedNode = null;
+}
+
+function focusNode(name) {
+  const node = visibleNodes.find(n => n.name === name);
+  if (node) {
+    selectedNode = node;
+    showInfoPanel(node);
+  }
+}
+
+// ============================================================
+// Query Functions
+// ============================================================
+
+function queryCompound(name) {
+  document.getElementById('query-type').value = 'compound';
+  document.getElementById('query-keyword').value = name;
+  executeQuery();
+}
+
+function queryPharmacology(action) {
+  document.getElementById('query-type').value = 'pharmacology';
+  document.getElementById('query-keyword').value = action;
+  executeQuery();
+}
+
+function queryClass(cls) {
+  document.getElementById('query-type').value = 'class';
+  document.getElementById('query-keyword').value = cls;
+  executeQuery();
+}
+
+function queryWavelength(wl) {
+  document.getElementById('query-type').value = 'wavelength';
+  document.getElementById('query-keyword').value = wl;
+  executeQuery();
+}
+
+function queryMethod(keyword) {
+  document.getElementById('query-type').value = 'method';
+  document.getElementById('query-keyword').value = keyword;
+  executeQuery();
+}
+
+function queryYield(keyword) {
+  document.getElementById('query-type').value = 'yield';
+  document.getElementById('query-keyword').value = keyword;
+  executeQuery();
+}
+
+function queryPeakCount(count) {
+  document.getElementById('query-type').value = 'peak';
+  document.getElementById('query-keyword').value = count;
+  executeQuery();
+}
+
+function executeQuery() {
+  const type = document.getElementById('query-type').value;
+  const keyword = document.getElementById('query-keyword').value.trim();
+  if (!keyword) return;
+  
+  const resultsList = document.getElementById('results-list');
+  const nodeIds = new Set();
+  const edgeIds = new Set();
+  const results = [];
+  
+  switch(type) {
+    case 'compound': {
+      // Find compound nodes matching keyword
+      const compounds = graphData.nodes.filter(n => n.label === 'Compound' && n.name.includes(keyword));
+      compounds.forEach(c => {
+        nodeIds.add(c.id);
+        results.push({ name: c.name, type: 'Compound', detail: c.properties?.compound_class || '', tags: Object.values(c.properties || {}).filter(v => typeof v === 'string' && v.length < 20) });
+        // Find connected herbs
+        graphData.edges.filter(e => (e.source === c.id || e.target === c.id) && e.type === 'CONTAINS_MARKER').forEach(e => {
+          const herbId = e.source === c.id ? e.target : e.source;
+          const herb = graphData.nodes.find(n => n.id === herbId);
+          if (herb) {
+            nodeIds.add(herbId);
+            edgeIds.add(graphData.edges.indexOf(e));
+            results.push({ name: herb.name, type: 'Herb', detail: e.properties?.content_range || '', tags: [] });
+          }
+        });
+        // Add class and pharmacology connections
+        graphData.edges.filter(e => (e.source === c.id || e.target === c.id)).forEach(e => {
+          const otherId = e.source === c.id ? e.target : e.source;
+          const other = graphData.nodes.find(n => n.id === otherId);
+          if (other && (other.label === 'CompoundClass' || other.label === 'Pharmacology')) {
+            nodeIds.add(otherId);
+            edgeIds.add(graphData.edges.indexOf(e));
+          }
+        });
+      });
+      break;
+    }
+    case 'pharmacology': {
+      const pharmNodes = graphData.nodes.filter(n => n.label === 'Pharmacology' && n.name.includes(keyword));
+      pharmNodes.forEach(p => {
+        nodeIds.add(p.id);
+        // Find connected compounds
+        graphData.edges.filter(e => (e.source === p.id || e.target === p.id) && e.type === 'HAS_PHARMACOLOGY').forEach(e => {
+          const compId = e.source === p.id ? e.target : e.source;
+          const comp = graphData.nodes.find(n => n.id === compId);
+          if (comp) {
+            nodeIds.add(compId);
+            edgeIds.add(graphData.edges.indexOf(e));
+            results.push({ name: comp.name, type: 'Compound', detail: comp.properties?.compound_class || '', tags: [] });
+            // Find connected herbs
+            graphData.edges.filter(e2 => (e2.source === compId || e2.target === compId) && e2.type === 'CONTAINS_MARKER').forEach(e2 => {
+              const herbId = e2.source === compId ? e2.target : e2.source;
+              const herb = graphData.nodes.find(n => n.id === herbId);
+              if (herb && !nodeIds.has(herbId)) {
+                nodeIds.add(herbId);
+                edgeIds.add(graphData.edges.indexOf(e2));
+                results.push({ name: herb.name, type: 'Herb', detail: '', tags: [] });
+              }
+            });
+          }
+        });
+      });
+      break;
+    }
+    case 'class': {
+      const classNodes = graphData.nodes.filter(n => n.label === 'CompoundClass' && n.name.includes(keyword));
+      classNodes.forEach(c => {
+        nodeIds.add(c.id);
+        graphData.edges.filter(e => (e.source === c.id || e.target === c.id) && e.type === 'BELONGS_TO_CLASS').forEach(e => {
+          const compId = e.source === c.id ? e.target : e.source;
+          const comp = graphData.nodes.find(n => n.id === compId);
+          if (comp) {
+            nodeIds.add(compId);
+            edgeIds.add(graphData.edges.indexOf(e));
+            results.push({ name: comp.name, type: 'Compound', detail: comp.properties?.compound_subclass || '', tags: comp.properties?.pharmacology ? comp.properties.pharmacology.split(', ') : [] });
+            graphData.edges.filter(e2 => (e2.source === compId || e2.target === compId) && e2.type === 'CONTAINS_MARKER').forEach(e2 => {
+              const herbId = e2.source === compId ? e2.target : e2.source;
+              const herb = graphData.nodes.find(n => n.id === herbId);
+              if (herb && !nodeIds.has(herbId)) {
+                nodeIds.add(herbId);
+                edgeIds.add(graphData.edges.indexOf(e2));
+                results.push({ name: herb.name, type: 'Herb', detail: '', tags: [] });
+              }
+            });
+          }
+        });
+      });
+      break;
+    }
+    case 'wavelength': {
+      const wlNodes = graphData.nodes.filter(n => n.label === 'Wavelength' && n.name.includes(keyword));
+      wlNodes.forEach(w => {
+        nodeIds.add(w.id);
+        graphData.edges.filter(e => (e.source === w.id || e.target === w.id) && e.type === 'DETECTED_AT').forEach(e => {
+          const herbId = e.source === w.id ? e.target : e.source;
+          const herb = graphData.nodes.find(n => n.id === herbId);
+          if (herb) {
+            nodeIds.add(herbId);
+            edgeIds.add(graphData.edges.indexOf(e));
+            results.push({ name: herb.name, type: 'Herb', detail: `检测波长: ${w.name}`, tags: [] });
+          }
+        });
+      });
+      break;
+    }
+    case 'yield': {
+      const yieldNodes = graphData.nodes.filter(n => n.label === 'YieldRange' && n.name.includes(keyword));
+      yieldNodes.forEach(y => {
+        nodeIds.add(y.id);
+        graphData.edges.filter(e => (e.source === y.id || e.target === y.id) && e.type === 'HAS_YIELD').forEach(e => {
+          const herbId = e.source === y.id ? e.target : e.source;
+          const herb = graphData.nodes.find(n => n.id === herbId);
+          if (herb) {
+            nodeIds.add(herbId);
+            edgeIds.add(graphData.edges.indexOf(e));
+            results.push({ name: herb.name, type: 'Herb', detail: `出膏率: ${y.name}`, tags: [] });
+          }
+        });
+      });
+      break;
+    }
+    case 'peak': {
+      const peakNodes = graphData.nodes.filter(n => n.label === 'PeakCount' && n.name.includes(keyword));
+      peakNodes.forEach(p => {
+        nodeIds.add(p.id);
+        graphData.edges.filter(e => (e.source === p.id || e.target === p.id) && e.type === 'HAS_PEAK_COUNT').forEach(e => {
+          const herbId = e.source === p.id ? e.target : e.source;
+          const herb = graphData.nodes.find(n => n.id === herbId);
+          if (herb) {
+            nodeIds.add(herbId);
+            edgeIds.add(graphData.edges.indexOf(e));
+            results.push({ name: herb.name, type: 'Herb', detail: `特征峰: ${p.name}`, tags: [] });
+          }
+        });
+      });
+      break;
+    }
+    case 'herb': {
+      const herb = graphData.nodes.find(n => n.label === 'Herb' && n.name.includes(keyword));
+      if (herb) {
+        nodeIds.add(herb.id);
+        results.push({ name: herb.name, type: 'Herb', detail: '', tags: [] });
+        graphData.edges.filter(e => e.source === herb.id || e.target === herb.id).forEach(e => {
+          const otherId = e.source === herb.id ? e.target : e.source;
+          const other = graphData.nodes.find(n => n.id === otherId);
+          if (other) {
+            nodeIds.add(otherId);
+            edgeIds.add(graphData.edges.indexOf(e));
+            results.push({ name: other.name, type: other.label, detail: e.type, tags: [] });
+          }
+        });
+      }
+      break;
+    }
+    case 'method': {
+      // Search HPLC methods by keyword
+      const methods = graphData.nodes.filter(n => n.label === 'HPLCMethod' && 
+        (n.properties?.mobile_phase?.includes(keyword) || n.properties?.columns?.includes(keyword)));
+      methods.forEach(m => {
+        nodeIds.add(m.id);
+        graphData.edges.filter(e => (e.source === m.id || e.target === m.id) && e.type === 'USES_HPLC').forEach(e => {
+          const herbId = e.source === m.id ? e.target : e.source;
+          const herb = graphData.nodes.find(n => n.id === herbId);
+          if (herb) {
+            nodeIds.add(herbId);
+            edgeIds.add(graphData.edges.indexOf(e));
+            results.push({ name: herb.name, type: 'Herb', detail: m.properties?.mobile_phase?.substring(0, 40) || '', tags: [] });
+          }
+        });
+      });
+      break;
+    }
+  }
+  
+  // Update visualization
+  visibleNodes = graphData.nodes.filter(n => nodeIds.has(n.id));
+  visibleEdges = graphData.edges.filter((e, i) => edgeIds.has(i));
+  repositionNodes();
+  
+  // Update results list
+  resultsList.innerHTML = `<div style="color:#7c6ff7;font-size:12px;margin-bottom:8px;">找到 ${results.length} 个结果 (${visibleNodes.length} 节点, ${visibleEdges.length} 边)</div>`;
+  results.forEach(r => {
+    const color = NODE_COLORS[r.type] || '#888';
+    resultsList.innerHTML += `<div class="result-item" style="border-left-color:${color}" onclick="focusNode('${r.name.replace(/'/g, "\\'")}')">
+      <div class="name">${r.name}</div>
+      <div class="detail">${r.detail}</div>
+      ${r.tags.length ? '<div class="tags">' + r.tags.map(t => `<span class="tag">${t}</span>`).join('') + '</div>' : ''}
+    </div>`;
+  });
+}
+
+function renderStats() {
+  const meta = graphData.metadata;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-row"><span>节点总数</span><span class="val">${meta.total_nodes}</span></div>
+    <div class="stat-row"><span>关系总数</span><span class="val">${meta.total_edges}</span></div>
+    <div class="stat-row"><span>药材</span><span class="val">${meta.node_types.Herb || 0}</span></div>
+    <div class="stat-row"><span>化合物</span><span class="val">${meta.node_types.Compound || 0}</span></div>
+    <div class="stat-row"><span>HPLC方法</span><span class="val">${meta.node_types.HPLCMethod || 0}</span></div>
+    <div class="stat-row"><span>药理作用</span><span class="val">${meta.node_types.Pharmacology || 0}</span></div>
+    <div class="stat-row"><span>化合物分类</span><span class="val">${meta.node_types.CompoundClass || 0}</span></div>
+  `;
+}
+
+function renderLegend() {
+  const legend = document.getElementById('legend');
+  let html = '';
+  for (const [type, color] of Object.entries(NODE_COLORS)) {
+    const count = graphData.metadata.node_types[type] || 0;
+    if (count > 0) {
+      html += `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${type} (${count})</div>`;
+    }
+  }
+  legend.innerHTML = html;
+}
+</script>
+</body>
+</html>
